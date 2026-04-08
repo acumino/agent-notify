@@ -4,6 +4,12 @@ Get a desktop notification whenever Claude Code asks for your permission — so 
 
 Works on **macOS**, **Linux**, and **Windows** (WSL / Git Bash). Works with both the **CLI** and **VS Code extension**.
 
+## Preview
+
+### macOS
+
+![macOS notification example](screenshots/macos-notification.png)
+
 ## Install
 
 ```bash
