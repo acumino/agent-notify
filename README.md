@@ -88,19 +88,19 @@ Get a Slack message when Claude Code needs your permission or finishes a session
 2. Run the installer:
 
 ```bash
-bash install-slack.sh --slack-webhook https://hooks.slack.com/services/...
+curl -fsSL https://raw.githubusercontent.com/acumino/agent-notify/main/install-slack.sh | bash -s -- --slack-webhook https://hooks.slack.com/services/...
 ```
 
 Or interactively (it will prompt for the URL):
 
 ```bash
-bash install-slack.sh
+curl -fsSL https://raw.githubusercontent.com/acumino/agent-notify/main/install-slack.sh | bash
 ```
 
 ### Uninstall Slack notifications
 
 ```bash
-bash install-slack.sh --uninstall
+curl -fsSL https://raw.githubusercontent.com/acumino/agent-notify/main/install-slack.sh | bash -s -- --uninstall
 ```
 
 ### Events
