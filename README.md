@@ -4,6 +4,8 @@ Get a desktop notification whenever Claude Code asks for your permission — so 
 
 Works on **macOS**, **Linux**, and **Windows** (WSL / Git Bash). Works with both the **CLI** and **VS Code extension**.
 
+**Also supports [Slack notifications](#slack-notifications)** — get a Slack message when Claude Code needs your permission or finishes a session, even when you're away from your desk.
+
 ## Preview
 
 ### macOS
