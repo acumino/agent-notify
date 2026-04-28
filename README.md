@@ -12,6 +12,10 @@ Works on **macOS**, **Linux**, and **Windows** (WSL / Git Bash). Works with both
 
 ![macOS notification example](screenshots/macos-notification.png)
 
+### Slack
+
+![Slack notification example](screenshots/slack-notification.png)
+
 ## Install
 
 ```bash

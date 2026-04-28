@@ -54,25 +54,91 @@ CONFIG_FILE="$HOME/.claude/remote-notify/config"
 source "$CONFIG_FILE"
 
 [[ -n "${SLACK_WEBHOOK_URL:-}" ]] || exit 0
+command -v jq &>/dev/null || exit 0
+command -v curl &>/dev/null || exit 0
 
 INPUT=$(cat 2>/dev/null || true)
 EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // ""' 2>/dev/null || true)
 
 send_slack() {
-    local text="$1"
-    jq -n --arg t "$text" '{"text": $t}' | \
-        curl -s -X POST "$SLACK_WEBHOOK_URL" \
-            -H 'Content-Type: application/json' \
-            -d @- > /dev/null 2>&1 || true
+    local payload="$1"
+    curl -s -X POST "$SLACK_WEBHOOK_URL" \
+        -H 'Content-Type: application/json' \
+        -d "$payload" > /dev/null 2>&1 || true
+}
+
+format_tool_input() {
+    local tool="$1" raw="$2"
+    local display=""
+    case "$tool" in
+        Bash)
+            display=$(printf '%s' "$raw" | jq -r '.command // ""' 2>/dev/null || true)
+            [[ -z "$display" ]] && display=$(printf '%s' "$raw" | jq -c '.' 2>/dev/null || echo "$raw")
+            ;;
+        Write|Read)
+            display=$(printf '%s' "$raw" | jq -r '.file_path // ""' 2>/dev/null || true)
+            [[ -n "$display" ]] && display="File: $display"
+            ;;
+        Edit)
+            local fpath
+            fpath=$(printf '%s' "$raw" | jq -r '.file_path // ""' 2>/dev/null || true)
+            display="File: $fpath"
+            ;;
+        *)
+            display=$(printf '%s' "$raw" | jq -c '.' 2>/dev/null || echo "$raw")
+            ;;
+    esac
+    [[ -z "$display" ]] && display="(no details)"
+    if [[ ${#display} -gt 2900 ]]; then
+        display="${display:0:2900}... (truncated)"
+    fi
+    printf '%s' "$display"
 }
 
 case "$EVENT" in
     PermissionRequest)
         TOOL=$(printf '%s' "$INPUT" | jq -r '.tool_name // "unknown"' 2>/dev/null || echo "unknown")
-        send_slack ":bell: *Claude Code needs your permission* | Tool: \`$TOOL\`"
+        TOOL_INPUT_RAW=$(printf '%s' "$INPUT" | jq -c '.tool_input // {}' 2>/dev/null || echo "{}")
+        CWD=$(printf '%s' "$INPUT" | jq -r '.cwd // ""' 2>/dev/null || true)
+        SESSION_ID=$(printf '%s' "$INPUT" | jq -r '.session_id // ""' 2>/dev/null || true)
+        SESSION_SHORT="${SESSION_ID:0:8}"
+
+        TOOL_DISPLAY=$(format_tool_input "$TOOL" "$TOOL_INPUT_RAW")
+        TOOL_DISPLAY_JSON=$(printf '%s' "$TOOL_DISPLAY" | jq -Rs '.' 2>/dev/null || echo '""')
+
+        PAYLOAD=$(jq -n \
+            --arg tool "$TOOL" \
+            --arg cwd "$CWD" \
+            --arg session "$SESSION_SHORT" \
+            --argjson tool_display "$TOOL_DISPLAY_JSON" \
+            '{
+                blocks: [
+                    {
+                        type: "header",
+                        text: { type: "plain_text", text: "Permission Request", emoji: true }
+                    },
+                    {
+                        type: "section",
+                        fields: [
+                            { type: "mrkdwn", text: ("*Tool:*\n`" + $tool + "`") },
+                            { type: "mrkdwn", text: ("*Session:*\n`" + $session + "`") }
+                        ]
+                    },
+                    {
+                        type: "section",
+                        text: { type: "mrkdwn", text: ("*Directory:*\n`" + $cwd + "`") }
+                    },
+                    {
+                        type: "section",
+                        text: { type: "mrkdwn", text: ("*Input:*\n```" + $tool_display + "```") }
+                    }
+                ]
+            }' 2>/dev/null) || PAYLOAD=$(jq -n --arg t ":bell: *Claude Code needs your permission* | Tool: \`$TOOL\`" '{"text": $t}')
+
+        send_slack "$PAYLOAD"
         ;;
     Stop|SubagentStop)
-        send_slack ":white_check_mark: *Claude Code* session ended"
+        send_slack '{"text":":white_check_mark: *Claude Code* session ended"}'
         ;;
 esac
 NOTIFY_EOF
@@ -169,11 +235,16 @@ uninstall() {
 
 # Parse args
 SLACK_WEBHOOK=""
-for arg in "$@"; do
-    case "$arg" in
-        --uninstall) uninstall; exit 0 ;;
-        --slack-webhook=*) SLACK_WEBHOOK="${arg#*=}" ;;
-        --slack-webhook) shift; SLACK_WEBHOOK="${1:-}" ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --uninstall)
+            uninstall; exit 0 ;;
+        --slack-webhook=*)
+            SLACK_WEBHOOK="${1#*=}"; shift ;;
+        --slack-webhook)
+            SLACK_WEBHOOK="${2:-}"; shift 2 ;;
+        *)
+            shift ;;
     esac
 done
 
